@@ -1279,12 +1279,17 @@ class MintUpdate():
         # Add mintupdate style class for easier theming
         self.ui_window.get_style_context().add_class('mintupdate')
 
+        def copy_log_path(widget):
+            clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+            clipboard.set_text(self.logger.log.name, -1)
+
         textbuffer = builder.get_object("log_textview").get_buffer()
         window.connect("destroy", destroy_window)
         builder.get_object("close_button").connect("clicked", destroy_window)
         builder.get_object("processid_label").set_text(str(os.getpid()))
         textbuffer.set_text(self.logger.read())
         builder.get_object("log_filename").set_text(str(self.logger.log.name))
+        builder.get_object("copy_log_path_button").connect("clicked", copy_log_path)
         self.logger.set_callback(update_log)
         self.information_window_showing = True
 
