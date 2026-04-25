@@ -3,18 +3,30 @@
 import codecs
 import fnmatch
 import gettext
+import json
 import os
+import queue
 import re
+import subprocess
 import sys
+import threading
 import traceback
 import html
 import locale
 
 import apt
-from gi.repository import Gio
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gio, Gtk, GLib
 
-from Classes import (CONFIGURED_KERNEL_TYPE, KERNEL_PKG_NAMES,
-                     PRIORITY_UPDATES, SUPPORTED_KERNEL_TYPES, Alias, KernelVersion, Update)
+import aptkit.simpleclient
+import aptkit.enums
+
+from multiprocess import Process, Queue
+
+from Classes import (CONFIG_PATH, CONFIGURED_KERNEL_TYPE, KERNEL_PKG_NAMES,
+                     PRIORITY_UPDATES, SUPPORTED_KERNEL_TYPES, Alias, KernelVersion, Update,
+                     _idle)
 
 gettext.install("mintupdate", "/usr/share/locale")
 
@@ -25,11 +37,149 @@ NON_TRANSLATED_PKGS = ["firefox", "thunderbird"]
 
 class APTCheck():
 
-    def __init__(self):
+    def __init__(self, ui_window=None):
         self.settings = Gio.Settings(schema_id="com.linuxmint.updates")
-        self.cache = apt.Cache()
+        self.ui_window = ui_window
+        self.cache = None
         self.priority_updates_available = False
+        # During build (find_changes/add_update) self.updates is a dict keyed by
+        # source_name. fetch_updates() replaces it with the final list of Updates.
         self.updates = {}
+        self.error = None
+
+    def load_cache(self):
+        self.cache = apt.Cache()
+
+    def refresh(self, interactive=False):
+        # Refresh the on-disk APT cache. Blocks until done. Returns None on
+        # success, or a short string describing what went wrong (transaction
+        # non-success exit_state, daemon error, cancellation, sync exception,
+        # or non-zero exit from mint-refresh-cache) — caller logs it.
+
+        if interactive:
+            self._aptkit_done = threading.Event()
+            self._refresh_error = None
+            self._refresh_via_aptkit()
+            if not self._aptkit_done.wait(timeout=600):
+                self._refresh_error = "Timed out waiting for aptkit cache refresh"
+            return self._refresh_error
+        else:
+            return self._refresh_via_mint_refresh_cache()
+
+    @_idle
+    def _refresh_via_aptkit(self):
+        try:
+            aptkit_client = aptkit.simpleclient.SimpleAPTClient(self.ui_window)
+
+            def on_finished(transaction, exit_state):
+                if exit_state != aptkit.enums.EXIT_SUCCESS:
+                    self._refresh_error = f"aptkit transaction finished with exit_state={exit_state}"
+                self._aptkit_done.set()
+
+            def on_error(error_code, error_details):
+                self._refresh_error = f"aptkit error code={error_code} details={error_details}"
+                self._aptkit_done.set()
+
+            def on_cancelled():
+                self._refresh_error = "aptkit transaction cancelled"
+                self._aptkit_done.set()
+
+            aptkit_client.set_progress_callback(None)
+            aptkit_client.set_finished_callback(on_finished)
+            aptkit_client.set_error_callback(on_error)
+            aptkit_client.set_cancelled_callback(on_cancelled)
+
+            aptkit_client.update_cache()
+        except Exception as e:
+            self._refresh_error = f"aptkit setup raised: {e}"
+            self._aptkit_done.set()
+
+    @staticmethod
+    def _refresh_via_mint_refresh_cache():
+        try:
+            result = subprocess.run(["sudo", "/usr/bin/mint-refresh-cache"])
+            if result.returncode != 0:
+                return f"mint-refresh-cache exited with code {result.returncode}"
+            return None
+        except Exception as e:
+            return f"mint-refresh-cache raised: {e}"
+
+    def fetch_updates(self):
+        # Compute the list of available updates. Blocks until done, or until
+        # the child process dies / times out — in which case self.error is set.
+        self.updates = []
+        self.error = None
+        result_queue = Queue()
+        process = Process(target=self._fetch_updates_in_process, args=(result_queue,))
+        process.start()
+        try:
+            self.error, self.updates = result_queue.get(timeout=60)
+        except queue.Empty:
+            self.error = "Timed out waiting for fetch_updates result"
+            if process.is_alive():
+                process.terminate()
+        process.join(timeout=5)
+        if self.error is None and process.exitcode not in (0, None):
+            self.error = f"fetch_updates child exited with code {process.exitcode}"
+
+    def _fetch_updates_in_process(self, queue):
+        try:
+            self.load_cache()
+            self.find_changes()
+            self.apply_l10n_descriptions()
+            self.load_aliases()
+            self.apply_aliases()
+            self.clean_descriptions()
+            queue.put([None, self.get_updates()])
+        except Exception as error:
+            print(sys.exc_info()[0])
+            print("Error in fetch_updates: %s" % error)
+            traceback.print_exc()
+            queue.put([str(error).replace("E:", "\n").strip(), []])
+
+    def fetch_test_updates(self, test_name):
+        print("SIMULATING TEST MODE:", test_name)
+        self.updates = {}
+        self.error = None
+
+        if test_name == "error":
+            self.error = "Testing - this is a simulated error."
+        elif test_name == "up-to-date":
+            pass
+        elif test_name == "self-update":
+            self.load_cache()
+            self._add_dummy_update("mintupdate", False)
+        elif test_name == "updates":
+            self.load_cache()
+            self._add_dummy_update("python3", False)
+            self._add_dummy_update("mint-meta-core", False)
+            self._add_dummy_update("linux-generic", True)
+            self._add_dummy_update("xreader", False)
+        elif test_name == "tracker-max-age":
+            self.load_cache()
+            self._add_dummy_update("dnsmasq", False)
+            self._add_dummy_update("linux-generic", True)
+
+            updates_json = {
+                "mint-meta-common": { "type": "package",  "since": "2020.12.03", "days": 99 },
+                "linux-meta":       { "type": "security", "since": "2020.12.03", "days": 99 }
+            }
+            root_json = {
+                "updates": updates_json,
+                "version": 1,
+                "checked": "2020.12.04",
+                "notified": "2020.12.03"
+            }
+            os.makedirs(CONFIG_PATH, exist_ok=True)
+            with open(os.path.join(CONFIG_PATH, "updates.json"), "w") as f:
+                json.dump(root_json, f)
+
+        # Match the post-fetch_updates contract: .updates is a list of Update objects.
+        self.updates = list(self.updates.values())
+
+    def _add_dummy_update(self, package_name, kernel_update):
+        pkg = self.cache[package_name]
+        self.add_update(pkg, kernel_update, "99.0.0")
 
     def load_aliases(self):
         self.aliases = {}
@@ -348,13 +498,12 @@ class APTCheck():
 if __name__ == "__main__":
     try:
         check = APTCheck()
-        check.find_changes()
-        check.apply_l10n_descriptions()
-        check.load_aliases()
-        check.apply_aliases()
-        check.clean_descriptions()
-        updates = check.get_updates()
-        for update in updates:
+        check.refresh()
+        check.fetch_updates()
+        if check.error is not None:
+            print("Error: %s" % check.error)
+            sys.exit(1)
+        for update in check.updates:
             print(update.display_name, update.new_version, update.short_description)
     except Exception as error:
         print(error)

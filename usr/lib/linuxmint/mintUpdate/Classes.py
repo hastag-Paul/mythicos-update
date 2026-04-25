@@ -71,6 +71,40 @@ def get_release_dates():
                 pass
     return release_dates
 
+class AutorefreshTimer(GLib.Source):
+    # A GSource that can be armed, disarmed, and re-armed without being
+    # recreated. Attach once at startup; thereafter call arm(seconds) to
+    # schedule the next dispatch and disarm() to cancel a pending one.
+    def __init__(self, callback):
+        super().__init__()
+        self._callback = callback
+
+    def prepare(self):
+        ready_time = self.get_ready_time()
+        if ready_time == -1:
+            return (False, -1)
+        now = GLib.get_monotonic_time()
+        if ready_time <= now:
+            return (True, 0)
+        timeout_ms = (ready_time - now + 999) // 1000
+        return (False, min(int(timeout_ms), 0x7FFFFFFF))
+
+    def check(self):
+        ready_time = self.get_ready_time()
+        return ready_time != -1 and ready_time <= GLib.get_monotonic_time()
+
+    def dispatch(self, callback, user_data):
+        self.set_ready_time(-1)
+        self._callback()
+        return GLib.SOURCE_CONTINUE
+
+    def arm(self, seconds):
+        self.set_ready_time(GLib.get_monotonic_time() + seconds * 1_000_000)
+
+    def disarm(self):
+        self.set_ready_time(-1)
+
+
 class KernelVersion():
 
     def __init__(self, version):
