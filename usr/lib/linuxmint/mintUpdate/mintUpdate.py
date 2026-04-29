@@ -124,7 +124,7 @@ class APTCacheMonitor():
 
     @_async
     def start(self):
-        self.application.refresh(False)
+        self.application.queue_refresh(False)
         self.update_cachetime()
         if os.path.isfile(self.pkgcache) and os.path.isfile(self.dpkgstatus):
             while True:
@@ -137,7 +137,7 @@ class APTCacheMonitor():
                             self.cachetime = cachetime
                             self.statustime = statustime
                             self.application.logger.write("Changes to the package cache detected; triggering refresh")
-                            self.application.refresh(False)
+                            self.application.queue_refresh(False)
                     except:
                         pass
                 time.sleep(90)
@@ -1159,12 +1159,17 @@ class MintUpdate():
             return
 
         self.logger.write("Update Manager is in tray mode; performing auto refresh")
-        if not self.refresh(True):
-            # refresh declined (e.g. updates_inhibited); try again shortly.
-            self.auto_refresh_source.arm(60)
-            return
 
-        # self.refresh() will restart the timer.
+        try:
+            if not self.refresh(True):
+                # refresh declined (e.g. updates_inhibited); try again shortly.
+                self.auto_refresh_source.arm(60)
+                return
+
+            # self.refresh() will restart the timer.
+        except Exception:
+            self.logger.write_error(f"Exception in auto-refresh tick: {traceback.format_exc()}")
+            self.auto_refresh_source.arm(60)
 
     def _compute_refresh_interval(self):
         prefix = "auto" if self.initial_refresh_done else ""
@@ -1487,7 +1492,7 @@ class MintUpdate():
     def run_mintsources(self):
         proc = subprocess.Popen(["pkexec", "mintsources"])
         proc.wait()
-        self.refresh(False)
+        self.queue_refresh(False)
 
     def open_timeshift(self, widget):
         subprocess.Popen(["pkexec", "timeshift-gtk"])
@@ -2065,9 +2070,13 @@ class MintUpdate():
         self.cache_monitor.resume()
         self.set_refresh_mode(False)
 
+    @_idle
+    def queue_refresh(self, refresh_cache):
+        self.refresh(refresh_cache)
+
     def refresh(self, refresh_cache):
         # Must be called on the main thread. Worker-thread callers should
-        # schedule it via GLib.idle_add(self.refresh, …).
+        # use queue_refresh() instead.
         if self.refreshing:
             return False
 
@@ -2157,6 +2166,10 @@ class MintUpdate():
         # Wait for all the caches to be refreshed
         for t in self.refresh_threads:
             t.join(timeout=300)
+            if t.is_alive():
+                self.logger.write_error(
+                    f"Cache refresh thread {t.name} did not complete within 300s; "
+                    "the update list may be stale")
 
         # Check presence of Mint layer
         if self.test_mode == "layer-error" or (not self.check_policy()):
@@ -2445,7 +2458,7 @@ class MintUpdate():
 
         GLib.idle_add(self.set_window_busy, False)
         if refresh_needed:
-            GLib.idle_add(self.refresh, False)
+            self.queue_refresh(False)
 
     def install(self, widget):
         if self.dpkg_locked():
