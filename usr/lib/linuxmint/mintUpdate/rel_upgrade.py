@@ -10,7 +10,7 @@ import subprocess
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gio
-from Classes import _idle, _async
+from util import _idle, _async
 gettext.install("mintupdate", "/usr/share/locale")
 
 class Assistant:

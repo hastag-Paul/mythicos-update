@@ -25,8 +25,8 @@ import aptkit.enums
 from multiprocess import Process, Queue
 
 from Classes import (CONFIG_PATH, CONFIGURED_KERNEL_TYPE, KERNEL_PKG_NAMES,
-                     PRIORITY_UPDATES, SUPPORTED_KERNEL_TYPES, Alias, KernelVersion, Update,
-                     _idle)
+                     PRIORITY_UPDATES, SUPPORTED_KERNEL_TYPES, Alias, KernelVersion, Update)
+from util import _idle
 
 gettext.install("mintupdate", "/usr/share/locale")
 

@@ -33,8 +33,8 @@ import logger
 from kernelwindow import KernelWindow
 from preferences import PreferencesWindow
 
-from Classes import MainloopTimer, Update, PRIORITY_UPDATES, UpdateTracker, _idle, _async
-from util import on_battery
+from Classes import MainloopTimer, Update, PRIORITY_UPDATES, UpdateTracker
+from util import on_battery, _idle, _async
 
 
 settings = Gio.Settings(schema_id="com.linuxmint.updates")
