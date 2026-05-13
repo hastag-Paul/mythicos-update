@@ -7,4 +7,4 @@ Type=oneshot
 CPUQuota=50%
 CPUWeight=20
 IOWeight=20
-ExecStart=/usr/lib/linuxmint/mintUpdate/automatic_upgrades.py
+ExecStart=/usr/lib/linuxmint/mintUpdate/system_automatic_upgrades.py

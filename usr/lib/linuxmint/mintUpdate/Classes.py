@@ -69,13 +69,14 @@ def get_release_dates():
                 pass
     return release_dates
 
-class AutorefreshTimer(GLib.Source):
+class MainloopTimer(GLib.Source):
     # A GSource that can be armed, disarmed, and re-armed without being
-    # recreated. Attach once at startup; thereafter call arm(seconds) to
-    # schedule the next dispatch and disarm() to cancel a pending one.
+    # recreated. Call arm(seconds) to schedule the next dispatch and
+    # disarm() to cancel a pending one.
     def __init__(self, callback):
         super().__init__()
         self._callback = callback
+        self.attach(None)
 
     def prepare(self):
         ready_time = self.get_ready_time()

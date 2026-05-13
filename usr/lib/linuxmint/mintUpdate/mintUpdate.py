@@ -20,6 +20,7 @@ import setproctitle
 import platform
 import re
 import aptUpdater
+import session_automatic_upgrades
 import xapp.os
 
 gi.require_version('Gtk', '3.0')
@@ -32,7 +33,8 @@ import logger
 from kernelwindow import KernelWindow
 from preferences import PreferencesWindow
 
-from Classes import AutorefreshTimer, Update, PRIORITY_UPDATES, UpdateTracker, _idle, _async
+from Classes import MainloopTimer, Update, PRIORITY_UPDATES, UpdateTracker, _idle, _async
+from util import on_battery
 
 
 settings = Gio.Settings(schema_id="com.linuxmint.updates")
@@ -130,8 +132,8 @@ class APTCacheMonitor():
                             self.statustime = statustime
                             self.application.logger.write("Changes to the package cache detected; triggering refresh")
                             self.application.queue_refresh(False)
-                    except:
-                        pass
+                    except Exception as e:
+                        self.application.logger.write_error("APTCacheMonitor: %s" % e)
                 time.sleep(90)
         else:
             self.application.logger.write("Package cache location not found, disabling cache monitoring")
@@ -175,8 +177,8 @@ class MintUpdate():
         self.reboot_required = False
         self.refreshing = False
         self.refresh_threads = []
-        self.auto_refresh_source = AutorefreshTimer(self._auto_refresh_tick)
-        self.auto_refresh_source.attach(None)
+        self.auto_refresh_source = MainloopTimer(self._auto_refresh_tick)
+        self.session_update_source = MainloopTimer(self._session_update_tick)
         self.initial_refresh_done = False
         self.last_refresh_time = 0
         self.hidden = True # whether the window is hidden or not
@@ -534,6 +536,7 @@ class MintUpdate():
             self.ui_notebook_details.set_current_page(0)
 
             self.start_auto_refresh()
+            self.start_session_updates()
 
             Gtk.main()
 
@@ -556,6 +559,9 @@ class MintUpdate():
                    "autorefresh-minutes", "autorefresh-hours", "autorefresh-days",
                    "refresh-schedule-enabled"):
             self.start_auto_refresh()
+
+        if key in ("auto-update-cinnamon-spices", "auto-update-flatpaks"):
+            self.start_session_updates()
 
 
 ######### EVENT HANDLERS #########
@@ -1206,6 +1212,37 @@ class MintUpdate():
         except Exception:
             self.logger.write_error(f"Exception in auto-refresh tick: {traceback.format_exc()}")
             self.auto_refresh_source.arm(60)
+
+    def start_session_updates(self):
+        # (Re)schedule the session-update timer based on current settings.
+        # Safe to call any time the settings change.
+        self.session_update_source.disarm()
+
+        if not (self.settings.get_boolean("auto-update-cinnamon-spices") or
+                self.settings.get_boolean("auto-update-flatpaks")):
+            self.logger.write("Automatic Flatpak/Spice updates disabled in preferences")
+            return
+
+        # Arm shortly after the first APT refresh so we don't compete with it.
+        self.session_update_source.arm(self._compute_refresh_interval() + 5 * MINUTE)
+
+    def _session_update_tick(self):
+        if not self.hidden or self.refreshing:
+            why = "window is open" if not self.hidden else "another refresh is in progress"
+            self.logger.write(f"Automatic Flatpak/Spice updates deferred ({why}); will retry shortly")
+            self.session_update_source.arm(60)
+            return
+
+        if on_battery():
+            self.logger.write("On battery power, deferring automatic Flatpak/Spice updates")
+            self.session_update_source.arm(HOUR)
+            return
+
+        try:
+            self.run_session_automatic_upgrades()
+        except Exception:
+            self.logger.write_error(f"Exception scheduling automatic Flatpak/Spice updates: {traceback.format_exc()}")
+        self.session_update_source.arm(DAY)
 
     def _compute_refresh_interval(self):
         prefix = "auto" if self.initial_refresh_done else ""
@@ -1978,6 +2015,17 @@ class MintUpdate():
     def refresh_flatpak_cache(self):
         self.logger.write("Refreshing cache for Flatpak updates")
         self.flatpak_updater.refresh()
+
+    @_async
+    def run_session_automatic_upgrades(self):
+        self.logger.write("Running automatic Flatpak/Spice updates")
+        try:
+            error = session_automatic_upgrades.run()
+            if error:
+                self.logger.write_error(error)
+        except Exception:
+            self.logger.write_error(f"Exception in automatic Flatpak/Spice updates: {traceback.format_exc()}")
+        self.queue_refresh(False)
 
     @_async
     def refresh_updates(self):

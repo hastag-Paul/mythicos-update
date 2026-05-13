@@ -285,8 +285,8 @@ class PreferencesWindow:
                 model = treeview.get_model()
                 iter = model.insert_before(None, None)
                 model.set_value(iter, BLACKLIST_PKG_NAME, pkg)
+                self._save_blacklist(treeview)
         dialog.destroy()
-        self._save_blacklist(treeview)
 
     def _remove_blacklisted_package(self, widget, treeview):
         selection = treeview.get_selection()

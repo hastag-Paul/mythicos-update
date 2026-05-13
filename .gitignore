@@ -1,0 +1,6 @@
+*.mo
+debian/mintupdate
+debian/.debhelper
+debian/files
+debian/mintupdate.debhelper.log
+debian/mintupdate.substvars
