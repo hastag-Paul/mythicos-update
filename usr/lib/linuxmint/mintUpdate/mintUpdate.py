@@ -33,8 +33,8 @@ import logger
 from kernelwindow import KernelWindow
 from preferences import PreferencesWindow
 
-from Classes import MainloopTimer, Update, PRIORITY_UPDATES, UpdateTracker
-from util import on_battery, _idle, _async
+from Classes import MainloopTimer, PRIORITY_UPDATES, UpdateTracker
+from util import on_battery, _idle, _async, Inhibitor
 
 
 settings = Gio.Settings(schema_id="com.linuxmint.updates")
@@ -185,7 +185,6 @@ class MintUpdate():
         self.packages = [] # packages selected for update
         self.flatpaks = [] # flatpaks selected for update
         self.spices = [] # spices selected for update
-        self.inhibit_cookie = 0
         self.logger = logger.Logger()
         self.cache_monitor = APTCacheMonitor(self)
         self.logger.write("Launching Update Manager")
@@ -214,6 +213,7 @@ class MintUpdate():
                     setattr(self, name, widget)
 
         self.context_id = self.ui_statusbar.get_context_id("mintUpdate")
+        self.inhibitor = Inhibitor(self.logger, self.ui_window)
         self.ui_window.connect("key-press-event",self.on_key_press_event)
         self.treeview = self.builder.get_object("treeview_update")
 
@@ -1224,7 +1224,10 @@ class MintUpdate():
             return
 
         # Arm shortly after the first APT refresh so we don't compete with it.
-        self.session_update_source.arm(self._compute_refresh_interval() + 5 * MINUTE)
+        if self.initial_refresh_done:
+            self.session_update_source.arm(5 * MINUTE)
+        else:
+            self.session_update_source.arm(self._compute_refresh_interval() + 5 * MINUTE)
 
     def _session_update_tick(self):
         if not self.hidden or self.refreshing:
@@ -1663,95 +1666,6 @@ class MintUpdate():
         self.logger.write("Restarting update manager...")
         os.system("/usr/lib/linuxmint/mintUpdate/mintUpdate.py show &")
 
-    def inhibit_pm(self, reason):
-        if self.inhibit_cookie > 0:
-            return
-
-        try:
-            bus = Gio.bus_get_sync(Gio.BusType.SESSION)
-        except GLib.Error as e:
-            self.logger.write("Couldn't get session bus to inhibit power management: %s" % e.message)
-            return
-
-        name, path, iface, args, unused = self.get_inhibitor_info(reason)
-
-        try:
-            ret = bus.call_sync(
-                name,
-                path,
-                iface,
-                "Inhibit",
-                args,
-                GLib.VariantType("(u)"),
-                Gio.DBusCallFlags.NONE,
-                2000,
-                None
-            )
-        except GLib.Error as e:
-            self.logger.write("Could not inhibit power management: %s" % e.message)
-            return
-
-        self.logger.write("Inhibited power management")
-        self.inhibit_cookie = ret.unpack()[0]
-
-    def uninhibit_pm(self):
-        if self.inhibit_cookie > 0:
-            try:
-                bus = Gio.bus_get_sync(Gio.BusType.SESSION)
-            except GLib.Error as e:
-                self.logger.write("Couldn't get session bus to uninhibit power management: %s" % e.message)
-                return
-
-            name, path, iface, unused_args, uninhibit_method = self.get_inhibitor_info("none")
-
-            try:
-                bus.call_sync(
-                    name,
-                    path,
-                    iface,
-                    uninhibit_method,
-                    GLib.Variant("(u)", (self.inhibit_cookie,)),
-                    None,
-                    Gio.DBusCallFlags.NONE,
-                    2000,
-                    None
-                )
-            except GLib.Error as e:
-                self.logger.write("Could not uninhibit power management: %s" % e.message)
-                return
-
-            self.logger.write("Resumed power management")
-            self.inhibit_cookie = 0
-
-    def get_inhibitor_info(self, reason):
-        session = os.environ.get("XDG_CURRENT_DESKTOP")
-
-        if session == "XFCE":
-            name = "org.freedesktop.PowerManagement"
-            path = "/org/freedesktop/PowerManagement/Inhibit"
-            iface = "org.freedesktop.PowerManagement.Inhibit"
-            args = GLib.Variant("(ss)", ("mintupdate", reason))
-            uninhibit_method = "UnInhibit"
-        else:
-            # https://github.com/linuxmint/cinnamon-session/blob/master/cinnamon-session/csm-inhibitor.h#L51-L58
-            #       LOGOUT | SUSPEND
-            flags =      1 | 4
-
-            xid = 0
-            if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11":
-                try:
-                    xid = self.ui_window.get_window().get_xid()
-                except:
-                    pass
-
-            name = "org.gnome.SessionManager"
-            path = "/org/gnome/SessionManager"
-            iface = "org.gnome.SessionManager"
-            args = GLib.Variant("(susu)", ("mintupdate", xid, reason, flags))
-            uninhibit_method = "Uninhibit"
-
-        return name, path, iface, args, uninhibit_method
-
 ######### KERNEL FEATURES #########
 
     def on_kernel_menu_activated(self, widget):
@@ -1921,7 +1835,7 @@ class MintUpdate():
     def refresh_cleanup(self):
         # cleanup when finished refreshing
         self.refreshing = False
-        self.uninhibit_pm()
+        self.inhibitor.uninhibit()
         self.cache_monitor.resume()
         self.set_refresh_mode(False)
 
@@ -1936,7 +1850,6 @@ class MintUpdate():
             return False
 
         # This really only exists to show the window on first-run when show-welcome-page is True
-        # TODO: Make this happen more deliberately somewhere.
         if self.updates_inhibited:
             self.logger.write("Updates are inhibited, skipping refresh")
             self.show_window()
@@ -1946,7 +1859,7 @@ class MintUpdate():
         self.refreshing = True
         self.set_refresh_mode(True)
         self.set_status(_("Checking for updates"), _("Checking for updates"), "mintupdate-checking-symbolic", not self.settings.get_boolean("hide-systray"))
-        self.inhibit_pm("Checking for updates")
+        self.inhibitor.inhibit("Checking for updates")
         self.cache_monitor.pause()
 
         if self.reboot_required:
@@ -2019,12 +1932,14 @@ class MintUpdate():
     @_async
     def run_session_automatic_upgrades(self):
         self.logger.write("Running automatic Flatpak/Spice updates")
+        self.inhibitor.inhibit("Running automatic Flatpak/Spice updates")
         try:
             error = session_automatic_upgrades.run()
             if error:
                 self.logger.write_error(error)
         except Exception:
             self.logger.write_error(f"Exception in automatic Flatpak/Spice updates: {traceback.format_exc()}")
+        self.inhibitor.uninhibit()
         self.queue_refresh(False)
 
     @_async
@@ -2312,7 +2227,7 @@ class MintUpdate():
             return
 
         self.cache_monitor.pause()
-        self.inhibit_pm("Installing updates")
+        self.inhibitor.inhibit("Installing updates")
         self.logger.write("Install requested by user")
         self._do_install()
 
@@ -2352,7 +2267,7 @@ class MintUpdate():
                 if [pkg for pkg in PRIORITY_UPDATES if pkg in self.packages]:
                     # Skip _post_install_cleanup — restart_app spawns a new
                     # instance that will take over.
-                    self.uninhibit_pm()
+                    self.inhibitor.uninhibit()
                     self.logger.write("Mintupdate was updated, restarting it...")
                     self.logger.close()
                     self.restart_app()
@@ -2391,7 +2306,7 @@ class MintUpdate():
         self._post_install_cleanup(refresh_needed)
 
     def _post_install_cleanup(self, refresh_needed):
-        self.uninhibit_pm()
+        self.inhibitor.uninhibit()
         self.cache_monitor.resume(False)
         GLib.idle_add(self.set_window_busy, False)
         if refresh_needed:
@@ -2401,6 +2316,6 @@ if __name__ == "__main__":
     try:
         xapp.os.add_network_proxy_to_env()
     except Exception as e:
-        print("Network proxy support unavailable: %s" % str(e))
+        print("Network proxy support unavailable: %s" % str(e), file=sys.stderr)
 
     MintUpdate()

@@ -15,9 +15,7 @@ import html
 import locale
 
 import apt
-import gi
-gi.require_version('Gtk', '3.0')
-from gi.repository import Gio, Gtk, GLib
+from gi.repository import Gio
 
 import aptkit.simpleclient
 import aptkit.enums
