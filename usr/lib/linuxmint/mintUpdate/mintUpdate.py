@@ -1975,7 +1975,7 @@ class MintUpdate():
                 self.apt_updater.fetch_updates()
 
             error = self.apt_updater.error
-            updates = self.apt_updater.updates
+            updates = self.apt_updater.update_list
 
             if error is not None:
                 self.logger.write_error("Error in aptUpdater.py, could not refresh the list of updates")

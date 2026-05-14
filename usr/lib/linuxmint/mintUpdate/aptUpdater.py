@@ -40,9 +40,8 @@ class AptUpdater():
         self.ui_window = ui_window
         self.cache = None
         self.priority_updates_available = False
-        # During build (find_changes/add_update) self.updates is a dict keyed by
-        # source_name. fetch_updates() replaces it with the final list of Updates.
         self.updates = {}
+        self.update_list = []
         self.error = None
         self.install_error = None
         self.install_cancelled = False
@@ -147,13 +146,13 @@ class AptUpdater():
     def fetch_updates(self):
         # Compute the list of available updates. Blocks until done, or until
         # the child process dies / times out — in which case self.error is set.
-        self.updates = []
+        self.update_list = []
         self.error = None
         result_queue = Queue()
         process = Process(target=self._fetch_updates_in_process, args=(result_queue,))
         process.start()
         try:
-            self.error, self.updates = result_queue.get(timeout=60)
+            self.error, self.update_list = result_queue.get(timeout=60)
         except queue.Empty:
             self.error = "Timed out waiting for fetch_updates result"
             if process.is_alive():
@@ -214,8 +213,7 @@ class AptUpdater():
             with open(os.path.join(CONFIG_PATH, "updates.json"), "w") as f:
                 json.dump(root_json, f)
 
-        # Match the post-fetch_updates contract: .updates is a list of Update objects.
-        self.updates = list(self.updates.values())
+        self.update_list = list(self.updates.values())
 
     def _add_dummy_update(self, package_name, kernel_update):
         pkg = self.cache[package_name]
@@ -543,7 +541,7 @@ if __name__ == "__main__":
         if check.error is not None:
             print("Error: %s" % check.error)
             sys.exit(1)
-        for update in check.updates:
+        for update in check.update_list:
             print(update.display_name, update.new_version, update.short_description)
     except Exception as error:
         print(error)
