@@ -152,21 +152,6 @@ class APTCacheMonitor():
             self.cachetime = os.path.getmtime(self.pkgcache)
             self.statustime = os.path.getmtime(self.dpkgstatus)
 
-class XAppStatusIcon():
-
-    def __init__(self, menu):
-        self.icon = XApp.StatusIcon()
-        self.icon.set_secondary_menu(menu)
-
-    def set_from_icon_name(self, name):
-        self.icon.set_icon_name(name)
-
-    def set_tooltip_text(self, text):
-        self.icon.set_tooltip_text(text)
-
-    def set_visible(self, visible):
-        self.icon.set_visible(visible)
-
 class MintUpdate():
 
     def __init__(self):
@@ -338,8 +323,9 @@ class MintUpdate():
             menu.append(menuItem)
             menu.show_all()
 
-            self.statusIcon = XAppStatusIcon(menu)
-            self.statusIcon.icon.connect('activate', self.on_statusicon_activated)
+            self.statusIcon = XApp.StatusIcon()
+            self.statusIcon.set_secondary_menu(menu)
+            self.statusIcon.connect('activate', self.on_statusicon_activated)
 
             # Main window menu
             fileMenu = Gtk.MenuItem.new_with_mnemonic(_("_File"))
@@ -583,7 +569,7 @@ class MintUpdate():
     @_idle
     def set_status(self, message, tooltip, icon, visible):
         self.set_status_message(message)
-        self.statusIcon.set_from_icon_name(icon)
+        self.statusIcon.set_icon_name(icon)
         self.statusIcon.set_tooltip_text(tooltip)
         self.statusIcon.set_visible(visible)
 
