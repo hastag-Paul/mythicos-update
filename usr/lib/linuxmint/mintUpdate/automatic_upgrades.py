@@ -2,28 +2,24 @@
 
 import os
 import subprocess
+import sys
 import time
+
+sys.path.insert(0, "/usr/lib/linuxmint/mintUpdate")
+from util import on_battery
 
 if not os.path.exists("/var/lib/linuxmint/mintupdate-automatic-upgrades-enabled"):
     exit(0)
 
 optionsfile = "/etc/mintupdate-automatic-upgrades.conf"
 logfile = "/var/log/mintupdate.log"
-power_connectfile="/sys/class/power_supply/AC/online"
 log = open(logfile, "a")
 log.write("\n-- Automatic Upgrade starting %s:\n" % time.strftime('%a %d %b %Y %H:%M:%S %Z'))
 log.flush()
 
 pkla_source = "/usr/share/linuxmint/mintupdate/automation/99-mintupdate-temporary.pkla"
 pkla_target = "/etc/polkit-1/localauthority/90-mandatory.d/99-mintupdate-temporary.pkla"
-try:
-    power_supply_file = open(power_connectfile)
-    powersupply = power_supply_file.read()[0]=='1'
-    power_supply_file.close()
-except:
-    powersupply = True
-    log.write(power_connectfile+" not found. Ignore power supply check.")
-if powersupply:
+if not on_battery():
     try:
         # Put shutdown and reboot blocker into place
         os.symlink(pkla_source, pkla_target)
