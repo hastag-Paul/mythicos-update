@@ -1,7 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.38.2 -->
+<!-- Generated with glade 3.40.0 -->
 <interface>
   <requires lib="gtk+" version="3.18"/>
+  <object class="GtkImage" id="clear_button_image">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">xsi-edit-clear-symbolic</property>
+    <property name="icon_size">2</property>
+  </object>
+  <object class="GtkImage" id="install_button_image">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">mintupdate-action-install-symbolic</property>
+    <property name="icon_size">2</property>
+  </object>
+  <object class="GtkImage" id="refresh_button_image">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">xsi-view-refresh-symbolic</property>
+    <property name="icon_size">2</property>
+  </object>
+  <object class="GtkImage" id="select_all_button_image">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">xsi-edit-select-all-symbolic</property>
+    <property name="icon_size">2</property>
+  </object>
   <object class="GtkWindow" id="window">
     <property name="can-focus">False</property>
     <property name="window-position">center</property>
@@ -25,14 +49,23 @@
           <object class="GtkToolbar" id="toolbar">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
-            <property name="toolbar-style">both</property>
-            <property name="icon_size">2</property>
+            <!-- <property name="spacing">6</property> -->
             <child>
-              <object class="GtkToolButton" id="clear_button">
+              <object class="GtkToolItem">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
-                <property name="label" translatable="yes">Clear</property>
-                <property name="icon-name">xsi-edit-clear-symbolic</property>
+                <child>
+                  <object class="GtkButton" id="clear_button">
+                    <property name="label" translatable="yes">Clear</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">False</property>
+                    <property name="image">clear_button_image</property>
+                    <property name="relief">none</property>
+                    <property name="image-position">top</property>
+                    <property name="always-show-image">True</property>
+                  </object>
+                </child>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -40,11 +73,21 @@
               </packing>
             </child>
             <child>
-              <object class="GtkToolButton" id="select_all_button">
+              <object class="GtkToolItem">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
-                <property name="label" translatable="yes">Select All</property>
-                <property name="icon-name">xsi-edit-select-all-symbolic</property>
+                <child>
+                  <object class="GtkButton" id="select_all_button">
+                    <property name="label" translatable="yes">Select All</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">False</property>
+                    <property name="image">select_all_button_image</property>
+                    <property name="relief">none</property>
+                    <property name="image-position">top</property>
+                    <property name="always-show-image">True</property>
+                  </object>
+                </child>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -62,12 +105,22 @@
               </packing>
             </child>
             <child>
-              <object class="GtkToolButton" id="refresh_button">
+              <object class="GtkToolItem">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
-                <property name="label" translatable="yes">Refresh</property>
-                <property name="use-underline">True</property>
-                <property name="icon-name">xsi-view-refresh-symbolic</property>
+                <child>
+                  <object class="GtkButton" id="refresh_button">
+                    <property name="label" translatable="yes">Refresh</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">False</property>
+                    <property name="image">refresh_button_image</property>
+                    <property name="relief">none</property>
+                    <property name="use-underline">True</property>
+                    <property name="image-position">top</property>
+                    <property name="always-show-image">True</property>
+                  </object>
+                </child>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -85,12 +138,22 @@
               </packing>
             </child>
             <child>
-              <object class="GtkToolButton" id="install_button">
+              <object class="GtkToolItem">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
-                <property name="label" translatable="yes">Install Updates</property>
-                <property name="use-underline">True</property>
-                <property name="icon-name">mintupdate-action-install-symbolic</property>
+                <child>
+                  <object class="GtkButton" id="install_button">
+                    <property name="label" translatable="yes">Install Updates</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">False</property>
+                    <property name="image">install_button_image</property>
+                    <property name="relief">none</property>
+                    <property name="use-underline">True</property>
+                    <property name="image-position">top</property>
+                    <property name="always-show-image">True</property>
+                  </object>
+                </child>
               </object>
               <packing>
                 <property name="expand">False</property>
