@@ -1353,12 +1353,7 @@ class MintUpdate():
 ######### SYSTRAY #########
 
     def tray_activate(self, time=0):
-        try:
-            focused = self.ui_window.get_window().get_state() & Gdk.WindowState.FOCUSED
-        except:
-            focused = self.ui_window.is_active() and self.ui_window.get_visible()
-
-        if focused:
+        if self.ui_window.is_active():
             self.save_window_size()
             self.hide_window()
         else:
