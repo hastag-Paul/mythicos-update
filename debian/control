@@ -1,13 +1,13 @@
-Source: mintupdate
+Source: mythicos-update
 Section: admin
 Priority: optional
-Maintainer: Clement Lefebvre <root@linuxmint.com>
+Maintainer: Studio Hastag <contact@hastag.fr>
 Build-Depends: debhelper (>= 9),
                python3,
                dh-python
 Standards-Version: 3.9.5
 
-Package: mintupdate
+Package: mythicos-update
 Architecture: all
 Depends:
  ${python:Depends},
@@ -23,10 +23,9 @@ Depends:
  python3-setproctitle,
  python3-xapp (>= 1.6),
  systemd,
- mint-common (>= 2.4.2),
- mint-mirrors,
- mint-upgrade-info,
+ mythicos-common (>= 2.4.2),
+ mythicos-upgrade-info,
  gir1.2-notify-0.7,
  gir1.2-xapp-1.0
-Description: The Linux Mint Update Manager
+Description: MythicOS Update Manager
  Helps installing security updates and new versions of packages.
