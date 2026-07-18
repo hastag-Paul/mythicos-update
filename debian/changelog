@@ -1,3 +1,13 @@
+mythicos-update (7.1.4+mythicos1) lucid; urgency=medium
+
+  * Initial release of MythicOS Update Manager.
+  * Forked from Linux Mint's mintupdate.
+  * Renamed all Mint components to MythicOS equivalents.
+  * Updated paths.
+
+ -- Studio Hastag <contact@hastag.fr>  Sat, 18 Jul 2026 14:54:00 +0200
+
+
 mintupdate (7.1.4) zena; urgency=medium
 
   * l10n: Update translations
