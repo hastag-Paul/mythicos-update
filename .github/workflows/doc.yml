@@ -3,8 +3,10 @@ name: Rename manpages Mint → MythicOS
 on:
   push:
     branches:
-      - main
       - master
+
+permissions:
+  contents: write
 
 jobs:
   rename:
@@ -13,6 +15,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Rename manpages
         run: |
@@ -28,10 +32,7 @@ jobs:
           for OLD in "${!RENAMES[@]}"; do
             NEW="${RENAMES[$OLD]}"
             if [ -f "$MAN_DIR/$OLD" ]; then
-              echo "Renaming $OLD → $NEW"
               mv "$MAN_DIR/$OLD" "$MAN_DIR/$NEW"
-            else
-              echo "Skipping $OLD (not found)"
             fi
           done
 
