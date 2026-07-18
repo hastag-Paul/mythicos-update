@@ -1,10 +1,12 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: mintupdate
-Upstream-Contact: Clement Lefebvre <root@linuxmint.com>
-Source: https://github.com/linuxmint/mintupdate
+Upstream-Name: mythicos-update
+Upstream-Contact: Studio Hastag <contact@hastag.fr>
+Source: https://github.com/Studio-Hastag/mythicos-update
 
 Files: *
-Copyright: 2007-2015 Clement Lefebvre <root@linuxmint.com>
+Copyright:
+ 2007-2015 Clement Lefebvre <root@linuxmint.com>
+ 2026 Studio Hastag <contact@hastag.fr>
 License: GPL-3+
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -21,4 +23,3 @@ License: GPL-3+
  .
  On Debian systems, the complete text of the GNU General
  Public License version 3 can be found in "/usr/share/common-licenses/GPL-3".
-
